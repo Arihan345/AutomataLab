@@ -5,9 +5,14 @@ import RegexInput from './components/RegexInput';
 import NFAViewer from './components/NFAViewer';
 import AlgorithmInspector from './components/AlgorithmInspector';
 import SaveLoadPanel from './components/SaveLoadPanel';
+import Simulator from './components/Simulator';
+import PDAInput from './components/PDAInput';
+import PDAViewer from './components/PDAViewer';
+import PDASimulator from './components/PDASimulator';
 import { subsetConstruction } from './lib/subsetConstruction';
 import { minimizeDFA } from './lib/minimizeDFA';
 import type { DFA, NFA } from './types/automaton';
+import type { PDA } from './types/pda';
 
 const sampleDfa: DFA = {
   id: 1,
@@ -26,6 +31,7 @@ const sampleDfa: DFA = {
 export default function App() {
   const [currentDfa, setCurrentDfa] = useState<DFA>(sampleDfa);
   const [currentNfa, setCurrentNfa] = useState<NFA | null>(null);
+  const [currentPda, setCurrentPda] = useState<PDA | null>(null);
 
   const derivedDfa = currentNfa
     ? subsetConstruction(currentNfa, 2, 'Derived DFA', 'From NFA via subset construction')
@@ -42,6 +48,7 @@ export default function App() {
         <div style={{ width: 300 }}>
           <ManualInput onSubmit={setCurrentDfa} />
           <SaveLoadPanel type="dfa" currentData={currentDfa} onLoad={setCurrentDfa} />
+          <Simulator dfa={currentDfa} />
         </div>
         <div style={{ flex: 1 }}>
           <DFAViewer dfa={currentDfa} />
@@ -63,11 +70,32 @@ export default function App() {
         )}
       </div>
 
+      {/* PDA section */}
+      <div style={{ display: 'flex', minHeight: '50vh' }}>
+        <div style={{ width: 300 }}>
+          <PDAInput onSubmit={setCurrentPda} />
+          {currentPda && (
+            <>
+              <SaveLoadPanel type="pda" currentData={currentPda} onLoad={setCurrentPda} />
+              <PDASimulator pda={currentPda} />
+            </>
+          )}
+        </div>
+        {currentPda && (
+          <div style={{ flex: 1 }}>
+            <PDAViewer pda={currentPda} />
+          </div>
+        )}
+      </div>
+
       {/* Derived DFA (subset construction) */}
       {derivedDfa && (
-        <div style={{ minHeight: '50vh' }}>
-          <h4 style={{ margin: 4 }}>Derived DFA (subset construction)</h4>
-          <div style={{ height: '45vh' }}>
+        <div style={{ display: 'flex', minHeight: '50vh' }}>
+          <div style={{ width: 300 }}>
+            <h4 style={{ margin: 4 }}>Derived DFA (subset construction)</h4>
+            <Simulator dfa={derivedDfa} />
+          </div>
+          <div style={{ flex: 1, height: '45vh' }}>
             <DFAViewer dfa={derivedDfa} />
           </div>
         </div>
@@ -75,9 +103,12 @@ export default function App() {
 
       {/* Minimal DFA */}
       {minimizedDfa && (
-        <div style={{ minHeight: '50vh' }}>
-          <h4 style={{ margin: 4 }}>Minimal DFA</h4>
-          <div style={{ height: '45vh' }}>
+        <div style={{ display: 'flex', minHeight: '50vh' }}>
+          <div style={{ width: 300 }}>
+            <h4 style={{ margin: 4 }}>Minimal DFA</h4>
+            <Simulator dfa={minimizedDfa} />
+          </div>
+          <div style={{ flex: 1, height: '45vh' }}>
             <DFAViewer dfa={minimizedDfa} />
           </div>
         </div>
