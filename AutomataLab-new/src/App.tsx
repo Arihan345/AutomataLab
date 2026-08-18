@@ -4,6 +4,7 @@ import ManualInput from './components/ManualInput';
 import RegexInput from './components/RegexInput';
 import NFAViewer from './components/NFAViewer';
 import AlgorithmInspector from './components/AlgorithmInspector';
+import SaveLoadPanel from './components/SaveLoadPanel';
 import { subsetConstruction } from './lib/subsetConstruction';
 import { minimizeDFA } from './lib/minimizeDFA';
 import type { DFA, NFA } from './types/automaton';
@@ -30,22 +31,17 @@ export default function App() {
     ? subsetConstruction(currentNfa, 2, 'Derived DFA', 'From NFA via subset construction')
     : null;
 
-if (derivedDfa) {
-  console.log('Derived DFA:', JSON.stringify(derivedDfa, null, 2));
-}
-
   const minimizedDfa = derivedDfa
     ? minimizeDFA(derivedDfa, 3, 'Minimal DFA', 'Minimized via partition refinement')
     : null;
-if (minimizedDfa) {
-  console.log('Minimal DFA:', JSON.stringify(minimizedDfa, null, 2));
-}
+
   return (
     <div style={{ width: '100vw', display: 'flex', flexDirection: 'column' }}>
       {/* Manual DFA section */}
-      <div style={{ display: 'flex', height: '50vh' }}>
+      <div style={{ display: 'flex', minHeight: '50vh' }}>
         <div style={{ width: 300 }}>
           <ManualInput onSubmit={setCurrentDfa} />
+          <SaveLoadPanel type="dfa" currentData={currentDfa} onLoad={setCurrentDfa} />
         </div>
         <div style={{ flex: 1 }}>
           <DFAViewer dfa={currentDfa} />
@@ -53,9 +49,12 @@ if (minimizedDfa) {
       </div>
 
       {/* Regex -> NFA section */}
-      <div style={{ display: 'flex', height: '50vh' }}>
+      <div style={{ display: 'flex', minHeight: '50vh' }}>
         <div style={{ width: 300 }}>
           <RegexInput onSubmit={setCurrentNfa} />
+          {currentNfa && (
+            <SaveLoadPanel type="nfa" currentData={currentNfa} onLoad={setCurrentNfa} />
+          )}
         </div>
         {currentNfa && (
           <div style={{ flex: 1 }}>
@@ -66,9 +65,9 @@ if (minimizedDfa) {
 
       {/* Derived DFA (subset construction) */}
       {derivedDfa && (
-        <div style={{ height: '50vh' }}>
+        <div style={{ minHeight: '50vh' }}>
           <h4 style={{ margin: 4 }}>Derived DFA (subset construction)</h4>
-          <div style={{ height: 'calc(100% - 24px)' }}>
+          <div style={{ height: '45vh' }}>
             <DFAViewer dfa={derivedDfa} />
           </div>
         </div>
@@ -76,9 +75,9 @@ if (minimizedDfa) {
 
       {/* Minimal DFA */}
       {minimizedDfa && (
-        <div style={{ height: '50vh' }}>
+        <div style={{ minHeight: '50vh' }}>
           <h4 style={{ margin: 4 }}>Minimal DFA</h4>
-          <div style={{ height: 'calc(100% - 24px)' }}>
+          <div style={{ height: '45vh' }}>
             <DFAViewer dfa={minimizedDfa} />
           </div>
         </div>
