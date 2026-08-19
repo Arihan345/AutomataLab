@@ -4,6 +4,8 @@ import Home from './components/Home';
 import RegexPage from './components/RegexPage';
 import PDAPage from './components/PDAPage';
 import CFGPage from './components/CFGPage';
+import TMPage from './components/TMPage';
+
 
 export default function App() {
   return (
@@ -14,6 +16,7 @@ export default function App() {
         <Route path="/regex" element={<RegexPage />} />
         <Route path="/pda" element={<PDAPage />} />
         <Route path="/cfg" element={<CFGPage />} />
+        <Route path="/tm" element={<TMPage />} />
       </Routes>
     </BrowserRouter>
   );
