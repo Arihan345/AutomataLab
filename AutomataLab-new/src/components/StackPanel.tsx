@@ -1,30 +1,37 @@
 export default function StackPanel({ stack }: { stack: string[] }) {
   return (
-    <div className="panel" style={{ width: 120 }}>
-      <h4 style={{ margin: '0 0 12px', fontSize: 12, color: '#ffb454', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+    <div style={{ width: 110 }}>
+      <p style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--violet)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px', fontWeight: 600 }}>
         Stack
-      </h4>
-      <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: 2 }}>
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column-reverse' }}>
         {stack.length === 0 && (
-          <p style={{ fontSize: 12, color: '#6b7280', fontFamily: "'JetBrains Mono', monospace" }}>empty</p>
+          <p style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--mono)' }}>empty</p>
         )}
-        {stack.map((symbol, i) => (
-          <div
-            key={i}
-            style={{
-              border: `1px solid ${i === stack.length - 1 ? '#ffb454' : '#262a31'}`,
-              borderRadius: 4,
-              padding: '6px 8px',
-              textAlign: 'center',
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 13,
-              color: i === stack.length - 1 ? '#ffb454' : '#e8eaed',
-              background: i === stack.length - 1 ? 'rgba(255,180,84,0.06)' : 'transparent',
-            }}
-          >
-            {symbol}
-          </div>
-        ))}
+        {stack.map((symbol, i) => {
+          const isTop = i === stack.length - 1;
+          return (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                border: `1px solid ${isTop ? 'var(--violet)' : 'var(--border)'}`,
+                borderTop: i < stack.length - 1 ? 'none' : undefined,
+                padding: '6px 9px',
+                fontFamily: 'var(--mono)',
+                fontSize: 12.5,
+                fontWeight: isTop ? 700 : 400,
+                color: isTop ? 'var(--violet)' : 'var(--text-1)',
+                background: isTop ? 'var(--violet-soft)' : 'transparent',
+              }}
+            >
+              <span>{symbol}</span>
+              {isTop && <span style={{ fontSize: 9, color: 'var(--violet)', letterSpacing: '0.05em' }}>TOP</span>}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

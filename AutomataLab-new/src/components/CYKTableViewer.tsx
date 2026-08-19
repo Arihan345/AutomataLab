@@ -5,7 +5,7 @@ export default function CYKTableViewer({ table, input }: { table: CYKCell[][]; i
   const rows = [...Array(n).keys()].reverse();
 
   return (
-    <div style={{ padding: '6px 16px', whiteSpace: 'nowrap' }}>
+    <div style={{ padding: '6px 16px 30px', whiteSpace: 'nowrap' }}>
       <table style={{ borderCollapse: 'collapse', fontFamily: 'var(--mono)', fontSize: 11 }}>
         <thead>
           <tr>

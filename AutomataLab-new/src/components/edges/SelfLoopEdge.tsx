@@ -14,12 +14,12 @@ export function SelfLoopEdge({ id, sourceX, sourceY, targetX, targetY, label, st
   const apexX = (sourceX + targetX) / 2;
 
   const isActive = (style as any)?.stroke === 'var(--violet)';
-  const markerId = `arrow-${id}`;
+  const markerId = `arrow-self-${id}`;
 
   return (
     <>
       <defs>
-        <marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <marker id={markerId} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
           <path d="M 0 0 L 10 5 L 0 10 z" fill={isActive ? 'var(--violet)' : 'var(--border-strong)'} />
         </marker>
       </defs>

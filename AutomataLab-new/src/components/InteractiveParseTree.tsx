@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useLayoutEffect } from 'react';
 import type { ParseTreeNode } from '../lib/cyk';
 
 function getDepth(node: ParseTreeNode): number {
@@ -20,9 +20,46 @@ function Node({
   const isTerminal = !node.children || node.children.length === 0;
   const nodeSize = levelGap < 60 ? { padding: '6px 12px', fontSize: 13 } : { padding: '10px 20px', fontSize: 17 };
 
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const childRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [connectorPaths, setConnectorPaths] = useState<{ trunk: string; branch: string | null; drops: string[] } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!node.children || node.children.length === 0 || !buttonRef.current || !containerRef.current) return;
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const parentRect = buttonRef.current.getBoundingClientRect();
+    const parentCenterX = parentRect.left + parentRect.width / 2 - containerRect.left;
+    const parentBottomY = parentRect.bottom - containerRect.top;
+
+    const childCenters = childRefs.current
+      .filter((el): el is HTMLDivElement => !!el)
+      .map((el) => {
+        const firstButton = el.querySelector('button');
+        const rect = (firstButton ?? el).getBoundingClientRect();
+        return {
+          x: rect.left + rect.width / 2 - containerRect.left,
+          y: rect.top - containerRect.top,
+        };
+      });
+
+    if (childCenters.length === 0) return;
+
+    const branchY = parentBottomY + levelGap / 2;
+    const trunk = `M ${parentCenterX} ${parentBottomY} L ${parentCenterX} ${branchY}`;
+    const branch = childCenters.length > 1
+      ? `M ${childCenters[0].x} ${branchY} L ${childCenters[childCenters.length - 1].x} ${branchY}`
+      : null;
+    const drops = childCenters.map((c) => `M ${c.x} ${branchY} L ${c.x} ${c.y}`);
+
+    setConnectorPaths({ trunk, branch, drops });
+  }, [node, levelGap]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
       <button
+        ref={buttonRef}
         onClick={() => onSelect(node, !!isRoot)}
         style={{
           border: `2px solid ${isTerminal ? 'var(--teal)' : 'var(--violet)'}`,
@@ -36,41 +73,35 @@ function Node({
           cursor: 'pointer',
           display: 'block',
           margin: 0,
+          lineHeight: 1,
+          position: 'relative',
+          zIndex: 2,
         }}
       >
         {node.symbol}
       </button>
 
       {node.children && node.children.length > 0 && (
-        <div style={{ display: 'flex', position: 'relative', marginTop: levelGap }}>
-          <div style={{ position: 'absolute', top: -levelGap, left: 0, right: 0, height: levelGap, pointerEvents: 'none' }}>
-            <svg width="100%" height={levelGap} style={{ overflow: 'visible', display: 'block' }}>
-              <line x1="50%" y1="0" x2="50%" y2={levelGap / 2} stroke="var(--border-strong)" strokeWidth="1.5" />
-              {node.children.length > 1 && (
-                <line x1="25%" y1={levelGap / 2} x2="75%" y2={levelGap / 2} stroke="var(--border-strong)" strokeWidth="1.5" />
-              )}
-              {node.children.map((_, i) => {
-                const pos = node.children!.length === 1 ? 50 : 25 + i * 50;
-                return (
-                  <line
-                    key={i}
-                    x1={`${pos}%`}
-                    y1={levelGap / 2}
-                    x2={`${pos}%`}
-                    y2={levelGap}
-                    stroke="var(--border-strong)"
-                    strokeWidth="1.5"
-                  />
-                );
-              })}
+        <>
+          {connectorPaths && (
+            <svg
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none', zIndex: 1 }}
+            >
+              <path d={connectorPaths.trunk} stroke="var(--border-strong)" strokeWidth="1.5" fill="none" />
+              {connectorPaths.branch && <path d={connectorPaths.branch} stroke="var(--border-strong)" strokeWidth="1.5" fill="none" />}
+              {connectorPaths.drops.map((d, i) => (
+                <path key={i} d={d} stroke="var(--border-strong)" strokeWidth="1.5" fill="none" />
+              ))}
             </svg>
-          </div>
-          <div style={{ display: 'flex', gap: levelGap < 60 ? 16 : 36 }}>
+          )}
+          <div style={{ display: 'flex', gap: levelGap < 60 ? 16 : 36, marginTop: levelGap }}>
             {node.children.map((c, i) => (
-              <Node key={i} node={c} onSelect={onSelect} levelGap={levelGap} />
+              <div key={i} ref={(el) => {(childRefs.current[i] = el)}}>
+                <Node node={c} onSelect={onSelect} levelGap={levelGap} />
+              </div>
             ))}
           </div>
-        </div>
+        </>
       )}
     </div>
   );
@@ -79,7 +110,7 @@ function Node({
 export default function InteractiveParseTree({ tree }: { tree: ParseTreeNode }) {
   const [selected, setSelected] = useState<{ node: ParseTreeNode; isRoot: boolean } | null>(null);
   const depth = getDepth(tree);
-  const levelGap = Math.max(40, Math.min(70, 500 / depth));
+  const levelGap = Math.max(30, Math.min(70, 600 / depth));
 
   function renderFooter() {
     if (!selected) {
@@ -120,26 +151,11 @@ export default function InteractiveParseTree({ tree }: { tree: ParseTreeNode }) 
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/*
-        alignItems: 'flex-start' (not 'center') is the actual fix.
-        Centering vertically pushed tall trees' roots above the scrollable
-        area. flex-start anchors the root at the top and lets the tree
-        grow downward, scrolling within this container if it's taller
-        than the viewport — root is always visible on load.
-      */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'flex-start',
-          padding: '40px 40px 24px',
-          overflow: 'auto',
-        }}
-      >
-        <Node node={tree} onSelect={(n, isRoot) => setSelected({ node: n, isRoot })} isRoot levelGap={levelGap} />
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div className="cyk-scroll" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 40 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', minWidth: 'fit-content' }}>
+          <Node node={tree} onSelect={(n, isRoot) => setSelected({ node: n, isRoot })} isRoot levelGap={levelGap} />
+        </div>
       </div>
       <div style={{ borderTop: '1px solid var(--border)', padding: 14, minHeight: 44, flexShrink: 0 }}>
         {renderFooter()}

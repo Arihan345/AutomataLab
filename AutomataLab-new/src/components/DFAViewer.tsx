@@ -3,11 +3,12 @@ import { ReactFlow, Background, Controls } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { StateNode } from './nodes/StateNode';
 import { SelfLoopEdge } from './edges/SelfLoopEdge';
+import { BackwardEdge } from './edges/BackwardEdge';
 import dfatoFlow from '../lib/dfaToFlow';
 import type { DFA } from '../types/automaton';
 
 const nodeTypes = { state: StateNode };
-const edgeTypes = { selfLoop: SelfLoopEdge };
+const edgeTypes = { selfLoop: SelfLoopEdge, backward: BackwardEdge };
 
 export default function DFAViewer({
   dfa,
@@ -41,8 +42,7 @@ export default function DFAViewer({
         edgeTypes={edgeTypes}
         className="dark-flow"
         fitView
-        fitViewOptions={{ padding: 0.35 }}
-        defaultViewport={{ x: 0, y: 40, zoom: 1 }}
+        fitViewOptions={{ padding: 0.3 }}
         onNodeClick={(_, node) => onStateClick?.(node.id)}
       >
         <Background color="var(--border)" gap={24} />

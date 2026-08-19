@@ -102,3 +102,17 @@ select:focus-visible { box-shadow: 0 0 0 3px var(--violet-soft); }
 @media (min-width: 1200px) {
   .home-decor { display: block !important; }
 }
+.panel { padding: 18px; }
+.cyk-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.cyk-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+.cyk-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--violet);
+}
+.cyk-scroll::-webkit-scrollbar-track {
+  background: var(--bg-elevated);
+}

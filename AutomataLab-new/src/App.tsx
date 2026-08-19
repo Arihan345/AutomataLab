@@ -6,23 +6,33 @@ import RegexPage from './components/RegexPage';
 import PDAPage from './components/PDAPage';
 import CFGPage from './components/CFGPage';
 import TMPage from './components/TMPage';
+import { FocusProvider, useFocus } from './context/FocusContext';
+
+function Layout() {
+  const { focused } = useFocus();
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', height: '100vh' }}>
+      {!focused && <Sidebar />}
+      <main style={{ flex: 1, overflow: 'hidden', height: '100vh' }}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/dfa" element={<DFAPage />} />
+          <Route path="/regex" element={<RegexPage />} />
+          <Route path="/pda" element={<PDAPage />} />
+          <Route path="/cfg" element={<CFGPage />} />
+          <Route path="/tm" element={<TMPage />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <BrowserRouter>
-      <div style={{ display: 'flex', minHeight: '100vh' }}>
-        <Sidebar />
-        <main style={{ flex: 1, overflowX: 'hidden' }}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/dfa" element={<DFAPage />} />
-            <Route path="/regex" element={<RegexPage />} />
-            <Route path="/pda" element={<PDAPage />} />
-            <Route path="/cfg" element={<CFGPage />} />
-            <Route path="/tm" element={<TMPage />} />
-          </Routes>
-        </main>
-      </div>
+      <FocusProvider>
+        <Layout />
+      </FocusProvider>
     </BrowserRouter>
   );
 }

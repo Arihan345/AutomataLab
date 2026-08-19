@@ -8,9 +8,11 @@ import { Input } from './ui/Input';
 import { Select } from './ui/Select';
 import { Button } from './ui/Button';
 import { EmptyState, Badge } from './ui/Composite';
+import { useFocus } from '../context/FocusContext';
 import type { DFA } from '../types/automaton';
 
 export default function DFAPage() {
+  const { focused, toggle } = useFocus();
   const [text, setText] = useState('');
   const [textError, setTextError] = useState<string | null>(null);
   const [dfa, setDfa] = useState<DFA | null>(null);
@@ -20,6 +22,7 @@ export default function DFAPage() {
   const [savedItems, setSavedItems] = useState<{ id: number; name: string }[]>([]);
   const [selectedSaved, setSelectedSaved] = useState('');
   const [saveName, setSaveName] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
 
   async function refreshSaved() {
     const list = await listAutomata();
@@ -47,6 +50,7 @@ export default function DFAPage() {
     if (!dfa || !saveName.trim()) return;
     await saveAutomaton('dfa', saveName, '', dfa);
     setSaveName('');
+    setMenuOpen(false);
     refreshSaved();
   }
 
@@ -66,48 +70,68 @@ export default function DFAPage() {
     : undefined;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <ControlBar>
-        <ControlGroup label="DFA">
-          <JsonPopover label={dfa ? 'Loaded ▾' : 'Load JSON'} text={text} onChange={setText} onBuild={handleBuild} error={textError} />
-        </ControlGroup>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+      {!focused && (
+        <ControlBar>
+          <ControlGroup label="DFA">
+            <JsonPopover label={dfa ? 'Loaded ▾' : 'Load JSON'} text={text} onChange={setText} onBuild={handleBuild} error={textError} />
+          </ControlGroup>
 
-        <ControlGroup label="Load saved">
-          <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} style={{ width: 150 }}>
-            <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
-            {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-          </Select>
-        </ControlGroup>
+          <ControlGroup label="Saved">
+            <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} style={{ width: 150 }}>
+              <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
+              {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+            </Select>
+          </ControlGroup>
 
-        <ControlGroup label="Test string">
-          <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder="e.g. aba" style={{ width: 130 }} />
-        </ControlGroup>
+          <ControlGroup label="Test string">
+            <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder="e.g. aba" style={{ width: 130 }} disabled={!dfa} />
+          </ControlGroup>
 
-        <div style={{ paddingTop: 16 }}>
-          <Button onClick={handleRun} disabled={!dfa || !input.trim()}>▶ Run</Button>
-        </div>
-
-        {result && (
-          <div style={{ paddingTop: 15 }}>
-            <Badge tone={result.accepted ? 'success' : 'danger'}>{result.accepted ? 'Accepted' : 'Rejected'}</Badge>
+          <div style={{ paddingTop: 16 }}>
+            <Button onClick={handleRun} disabled={!dfa || !input.trim()}>▶ Run</Button>
           </div>
-        )}
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, paddingTop: 16 }}>
-          <Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Save as..." style={{ width: 140 }} />
-          <Button variant="secondary" size="sm" onClick={handleSave} disabled={!dfa || !saveName.trim()}>Save</Button>
+          {result && (
+            <div style={{ paddingTop: 15 }}>
+              <Badge tone={result.accepted ? 'success' : 'danger'}>{result.accepted ? 'Accepted' : 'Rejected'}</Badge>
+            </div>
+          )}
+
+          <div style={{ paddingTop: 16 }}>
+            <Button variant="ghost" size="sm" onClick={toggle}>⛶ Focus</Button>
+          </div>
+
+          <div style={{ marginLeft: 'auto', paddingTop: 15, position: 'relative' }}>
+            <Button variant="ghost" size="sm" onClick={() => setMenuOpen((s) => !s)} disabled={!dfa}>⋯</Button>
+            {menuOpen && (
+              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 12, width: 220, zIndex: 20 }}>
+                <p style={{ fontSize: 10.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Save current</p>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                  <Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name..." style={{ flex: 1 }} />
+                  <Button size="sm" onClick={handleSave} disabled={!saveName.trim()}>Save</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </ControlBar>
+      )}
+
+      {focused && (
+        <div style={{ position: 'absolute', top: 12, right: 16, zIndex: 30 }}>
+          <Button variant="secondary" size="sm" onClick={toggle}>Esc · Exit Focus</Button>
         </div>
-      </ControlBar>
+      )}
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {!dfa ? (
-          <EmptyState icon="⌂" title="No DFA loaded" desc="Open the DFA control to paste a definition, or load a saved one." />
+          <EmptyState icon="⌂" title="No DFA loaded" desc="Open the DFA control to paste a definition." />
         ) : (
           <DFAViewer dfa={dfa} currentState={currentState} activeTransition={activeTransition} />
         )}
       </div>
 
-      {result && (
+      {result && !focused && (
         <div style={{ borderTop: '1px solid var(--border)', padding: '20px 24px 24px', background: 'var(--bg-elevated)' }}>
           <p style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--text-3)', letterSpacing: '0.06em', marginBottom: 14 }}>SIMULATION</p>
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -121,12 +145,23 @@ export default function DFAPage() {
                     background: i === stepIndex ? 'var(--violet-soft)' : 'transparent',
                     color: i === stepIndex ? 'var(--text-1)' : 'var(--text-2)',
                     cursor: 'pointer',
+                    opacity: i < stepIndex ? 0.55 : 1,
+                    boxShadow: i === stepIndex ? '0 0 0 3px var(--violet-soft)' : 'none',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   {state}
                 </button>
                 {i < result.path.length - 1 && (
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--violet)', margin: '0 4px', fontWeight: 700 }}>
+                  <span
+                    style={{
+                      fontFamily: 'var(--mono)', fontSize: 12,
+                      color: i === stepIndex ? 'var(--violet)' : 'var(--text-3)',
+                      margin: '0 4px',
+                      fontWeight: i === stepIndex ? 700 : 500,
+                      opacity: i < stepIndex ? 0.55 : 1,
+                    }}
+                  >
                     —{consumedSymbols[i]}→
                   </span>
                 )}
@@ -139,9 +174,37 @@ export default function DFAPage() {
             </div>
           </div>
           {stepIndex < consumedSymbols.length && (
-            <p style={{ marginTop: 14, fontSize: 12, color: 'var(--text-2)', fontFamily: 'var(--mono)' }}>
-              Reading '<span style={{ color: 'var(--violet)' }}>{consumedSymbols[stepIndex]}</span>' → transition {result.path[stepIndex]} → {result.path[stepIndex + 1]}
-            </p>
+            <div style={{ marginTop: 14, padding: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+              <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
+                <div>
+                  <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                    Current Step
+                  </p>
+                  <p style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--violet)', fontWeight: 700, margin: 0 }}>
+                    {result.path[stepIndex]} —{consumedSymbols[stepIndex]}→ {result.path[stepIndex + 1]}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                    Input
+                  </p>
+                  <p style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--text-1)', fontWeight: 600, margin: 0 }}>
+                    {consumedSymbols[stepIndex]}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                    Action
+                  </p>
+                  <p style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text-1)', margin: 0 }}>
+                    Read '{consumedSymbols[stepIndex]}' →{' '}
+                    {result.path[stepIndex] === result.path[stepIndex + 1]
+                      ? `remain in ${result.path[stepIndex + 1]}`
+                      : `move to ${result.path[stepIndex + 1]}`}
+                  </p>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}

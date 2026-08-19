@@ -3,18 +3,37 @@ import { EPSILON_PDA } from '../types/pda';
 import { getLayoutedElements } from './layout';
 
 export default function pdaToFlow(pda: PDA) {
-  const nodes = pda.states.map((state) => ({
-    id: state,
-    type: 'state',
-    position: { x: 0, y: 0 },
-    data: { label: state, isAccept: pda.acceptStates.includes(state), selfLoops: [] as string[] },
-  }));
+  const nodes = pda.states.map((state) => {
+    const selfLoopLabels: string[] = [];
+    Object.entries(pda.transitions[state] ?? {}).forEach(([symbol, stackTable]) => {
+      Object.entries(stackTable).forEach(([stackTop, results]) => {
+        results.forEach((r) => {
+          if (r.newState === state) {
+            selfLoopLabels.push(`${symbol === EPSILON_PDA ? 'ε' : symbol}, ${stackTop}→${r.push.join('') || 'ε'}`);
+          }
+        });
+      });
+    });
+
+    return {
+      id: state,
+      type: 'state',
+      position: { x: 0, y: 0 },
+      data: {
+        label: state,
+        isAccept: pda.acceptStates.includes(state),
+        isStart: state === pda.startState,
+        selfLoops: selfLoopLabels,
+      },
+    };
+  });
 
   const edgeGroups: Record<string, string[]> = {};
   Object.entries(pda.transitions).forEach(([fromState, symbolTable]) => {
     Object.entries(symbolTable).forEach(([symbol, stackTable]) => {
       Object.entries(stackTable).forEach(([stackTop, results]) => {
         results.forEach((r) => {
+          if (r.newState === fromState) return;
           const key = `${fromState}|${r.newState}`;
           const label = `${symbol === EPSILON_PDA ? 'ε' : symbol}, ${stackTop} → ${r.push.join('') || 'ε'}`;
           if (!edgeGroups[key]) edgeGroups[key] = [];
@@ -31,8 +50,13 @@ export default function pdaToFlow(pda: PDA) {
       source,
       target,
       label: labels.join(' | '),
+      style: { stroke: 'var(--border-strong)', strokeWidth: 1.4 },
+      labelStyle: { fill: 'var(--text-1)', fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 600 },
+      labelBgStyle: { fill: 'var(--surface-2)' },
+      labelBgPadding: [7, 4] as [number, number],
+      labelBgBorderRadius: 8,
     };
   });
 
-  return getLayoutedElements(nodes, edges);
+  return getLayoutedElements(nodes, edges, 'LR');
 }
