@@ -16,17 +16,23 @@ export default function PDAInput({ onSubmit }: { onSubmit: (pda: PDA) => void })
   }
 
   return (
-    <div style={{ padding: 10 }}>
+    <div className="panel">
+      <h4 style={{ margin: '0 0 12px', fontSize: 13, color: '#ffb454', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        PDA Definition
+      </h4>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={10}
-        cols={40}
+        style={{ width: '100%' }}
         placeholder="Paste your PDA JSON here"
       />
-      <br />
-      <button onClick={handleSubmit}>Load PDA</button>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      <div style={{ marginTop: 10 }}>
+        <button onClick={handleSubmit} disabled={text.trim().length === 0}>
+          Load PDA
+        </button>
+      </div>
+      {error && <p style={{ color: '#f87171', fontSize: 12, marginTop: 8 }}>{error}</p>}
     </div>
   );
 }

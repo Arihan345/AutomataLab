@@ -1,0 +1,150 @@
+import { useState, useEffect } from 'react';
+import DFAViewer from './DFAViewer';
+import { simulateDFA } from '../lib/simulate';
+import { saveAutomaton, listAutomata, loadAutomaton } from '../lib/api';
+import { ControlBar, ControlGroup } from './ui/ControlBar';
+import { JsonPopover } from './ui/JsonPopover';
+import { Input } from './ui/Input';
+import { Select } from './ui/Select';
+import { Button } from './ui/Button';
+import { EmptyState, Badge } from './ui/Composite';
+import type { DFA } from '../types/automaton';
+
+export default function DFAPage() {
+  const [text, setText] = useState('');
+  const [textError, setTextError] = useState<string | null>(null);
+  const [dfa, setDfa] = useState<DFA | null>(null);
+  const [input, setInput] = useState('');
+  const [result, setResult] = useState<{ path: string[]; accepted: boolean } | null>(null);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [savedItems, setSavedItems] = useState<{ id: number; name: string }[]>([]);
+  const [selectedSaved, setSelectedSaved] = useState('');
+  const [saveName, setSaveName] = useState('');
+
+  async function refreshSaved() {
+    const list = await listAutomata();
+    setSavedItems(list.filter((i: any) => i.type === 'dfa'));
+  }
+  useEffect(() => { refreshSaved(); }, []);
+
+  function handleBuild() {
+    try {
+      setDfa(JSON.parse(text));
+      setTextError(null);
+      setResult(null);
+    } catch {
+      setTextError('Invalid JSON.');
+    }
+  }
+
+  function handleRun() {
+    if (!dfa || !input.trim()) return;
+    setResult(simulateDFA(dfa, input));
+    setStepIndex(0);
+  }
+
+  async function handleSave() {
+    if (!dfa || !saveName.trim()) return;
+    await saveAutomaton('dfa', saveName, '', dfa);
+    setSaveName('');
+    refreshSaved();
+  }
+
+  async function handleLoadSaved(id: string) {
+    setSelectedSaved(id);
+    if (!id) return;
+    const record = await loadAutomaton(Number(id));
+    setDfa(record.data);
+    setText(JSON.stringify(record.data, null, 2));
+    setResult(null);
+  }
+
+  const currentState = result?.path[stepIndex];
+  const consumedSymbols = result ? [...input] : [];
+  const activeTransition = result && stepIndex > 0
+    ? { from: result.path[stepIndex - 1], symbol: consumedSymbols[stepIndex - 1] }
+    : undefined;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <ControlBar>
+        <ControlGroup label="DFA">
+          <JsonPopover label={dfa ? 'Loaded ▾' : 'Load JSON'} text={text} onChange={setText} onBuild={handleBuild} error={textError} />
+        </ControlGroup>
+
+        <ControlGroup label="Load saved">
+          <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} style={{ width: 150 }}>
+            <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
+            {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </Select>
+        </ControlGroup>
+
+        <ControlGroup label="Test string">
+          <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder="e.g. aba" style={{ width: 130 }} />
+        </ControlGroup>
+
+        <div style={{ paddingTop: 16 }}>
+          <Button onClick={handleRun} disabled={!dfa || !input.trim()}>▶ Run</Button>
+        </div>
+
+        {result && (
+          <div style={{ paddingTop: 15 }}>
+            <Badge tone={result.accepted ? 'success' : 'danger'}>{result.accepted ? 'Accepted' : 'Rejected'}</Badge>
+          </div>
+        )}
+
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, paddingTop: 16 }}>
+          <Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Save as..." style={{ width: 140 }} />
+          <Button variant="secondary" size="sm" onClick={handleSave} disabled={!dfa || !saveName.trim()}>Save</Button>
+        </div>
+      </ControlBar>
+
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        {!dfa ? (
+          <EmptyState icon="⌂" title="No DFA loaded" desc="Open the DFA control to paste a definition, or load a saved one." />
+        ) : (
+          <DFAViewer dfa={dfa} currentState={currentState} activeTransition={activeTransition} />
+        )}
+      </div>
+
+      {result && (
+        <div style={{ borderTop: '1px solid var(--border)', padding: '20px 24px 24px', background: 'var(--bg-elevated)' }}>
+          <p style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--text-3)', letterSpacing: '0.06em', marginBottom: 14 }}>SIMULATION</p>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+            {result.path.map((state, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
+                <button
+                  onClick={() => setStepIndex(i)}
+                  style={{
+                    fontFamily: 'var(--mono)', fontSize: 13, padding: '6px 12px', borderRadius: 6,
+                    border: `1px solid ${i === stepIndex ? 'var(--violet)' : 'var(--border)'}`,
+                    background: i === stepIndex ? 'var(--violet-soft)' : 'transparent',
+                    color: i === stepIndex ? 'var(--text-1)' : 'var(--text-2)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {state}
+                </button>
+                {i < result.path.length - 1 && (
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--violet)', margin: '0 4px', fontWeight: 700 }}>
+                    —{consumedSymbols[i]}→
+                  </span>
+                )}
+              </div>
+            ))}
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+              <Button size="sm" variant="secondary" disabled={stepIndex === 0} onClick={() => setStepIndex((i) => i - 1)}>◀</Button>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-2)' }}>{stepIndex + 1} / {result.path.length}</span>
+              <Button size="sm" variant="secondary" disabled={stepIndex >= result.path.length - 1} onClick={() => setStepIndex((i) => i + 1)}>▶</Button>
+            </div>
+          </div>
+          {stepIndex < consumedSymbols.length && (
+            <p style={{ marginTop: 14, fontSize: 12, color: 'var(--text-2)', fontFamily: 'var(--mono)' }}>
+              Reading '<span style={{ color: 'var(--violet)' }}>{consumedSymbols[stepIndex]}</span>' → transition {result.path[stepIndex]} → {result.path[stepIndex + 1]}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

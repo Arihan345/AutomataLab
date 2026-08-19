@@ -1,0 +1,30 @@
+.split-layout {
+  display: flex;
+  gap: 16px;
+}
+.split-layout > .side-panel {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.split-layout > .main-panel {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .split-layout {
+    flex-direction: column;
+  }
+  .split-layout > .side-panel {
+    width: 100%;
+  }
+  .split-layout > .main-panel {
+    min-height: 320px;
+  }
+}

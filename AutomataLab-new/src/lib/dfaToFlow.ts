@@ -1,42 +1,64 @@
 import type { DFA } from '../types/automaton';
 import { getLayoutedElements } from './layout';
 
-export default function dfatoFlow(dfa: DFA) {
-  const nodes = dfa.states.map((state) => {
-    const selfLoops = Object.entries(dfa.transitions[state] ?? {})
-      .filter(([, target]) => target === state)
-      .map(([symbol]) => symbol);
+export default function dfatoFlow(dfa: DFA, currentState?: string, activeTransition?: { from: string; symbol: string }) {
+  const nodes = dfa.states.map((state) => ({
+    id: state,
+    type: 'state',
+    position: { x: 0, y: 0 },
+    data: {
+      label: state,
+      isAccept: dfa.acceptStates.includes(state),
+      isStart: state === dfa.startState,
+      isCurrent: state === currentState,
+    },
+  }));
 
-    return {
-      id: state,
-      type: 'state',
-      position: { x: 0, y: 0 },
-      data: { label: state, isAccept: dfa.acceptStates.includes(state), selfLoops },
-    };
-  });
+  const allEdges: any[] = [];
 
-  const edges = Object.entries(dfa.transitions).flatMap(([fromState, table]) => {
-    const entries = Object.entries(table).filter(([, toState]) => toState !== fromState);
+  Object.entries(dfa.transitions).forEach(([fromState, table]) => {
+    const grouped: Record<string, string[]> = {};
+    const selfLoopSymbols: string[] = [];
 
-    return entries.map(([symbol, toState]) => {
-      const sameTargetSymbols = entries.filter(([, t]) => t === toState);
-      const symbolIndex = sameTargetSymbols.findIndex(([s]) => s === symbol);
-      const totalWithSameTarget = sameTargetSymbols.length;
-      // spread curvature evenly: e.g. 2 edges -> -0.3 and +0.3
-      const curvature = totalWithSameTarget > 1
-        ? (symbolIndex - (totalWithSameTarget - 1) / 2) * 0.6
-        : 0;
+    Object.entries(table).forEach(([symbol, toState]) => {
+      if (toState === fromState) {
+        selfLoopSymbols.push(symbol);
+      } else {
+        if (!grouped[toState]) grouped[toState] = [];
+        grouped[toState].push(symbol);
+      }
+    });
 
-      return {
-        id: `${fromState}-${symbol}-${toState}`,
+    Object.entries(grouped).forEach(([toState, symbols]) => {
+      const isActive = activeTransition?.from === fromState && symbols.includes(activeTransition.symbol);
+      allEdges.push({
+        id: `${fromState}-${symbols.join('_')}-${toState}`,
         source: fromState,
         target: toState,
-        label: symbol,
-        type: 'default',
-        pathOptions: { curvature },
-      };
+        label: symbols.join(', '),
+        style: { stroke: isActive ? 'var(--violet)' : 'var(--border-strong)', strokeWidth: isActive ? 2.5 : 1 },
+        labelStyle: { fill: isActive ? 'var(--violet)' : 'var(--text-1)', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700 },
+        labelBgStyle: { fill: isActive ? 'var(--violet-soft)' : 'var(--surface-2)' },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 10,
+        animated: isActive,
+      });
     });
+
+    if (selfLoopSymbols.length > 0) {
+      const isActive = activeTransition?.from === fromState && selfLoopSymbols.includes(activeTransition.symbol);
+      allEdges.push({
+        id: `${fromState}-self-${selfLoopSymbols.join('_')}`,
+        source: fromState,
+        target: fromState,
+        sourceHandle: 'loop-source',
+        targetHandle: 'loop-target',
+        type: 'selfLoop',
+        label: selfLoopSymbols.join(', '),
+        style: { stroke: isActive ? 'var(--violet)' : 'var(--border-strong)', strokeWidth: isActive ? 2.5 : 1.5 },
+      });
+    }
   });
 
-  return getLayoutedElements(nodes, edges);
+  return getLayoutedElements(nodes, allEdges);
 }

@@ -4,7 +4,7 @@ import type { Node, Edge } from '@xyflow/react';
 export function getLayoutedElements(nodes: Node[], edges: Edge[], direction: 'LR' | 'TB' = 'LR') {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: direction });
+  dagreGraph.setGraph({ rankdir: direction, nodesep: 90, ranksep: 140 });
 
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: 150, height: 50 });
