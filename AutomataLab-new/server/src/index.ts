@@ -10,9 +10,8 @@ const prisma = new PrismaClient({ adapter });
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
-const CORS_ORIGIN = process.env.CORS_ORIGIN ?? 'http://localhost:5173';
 
-app.use(cors({ origin: CORS_ORIGIN }));
+app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
 app.use(express.json());
 
 app.post('/automata', async (req, res) => {

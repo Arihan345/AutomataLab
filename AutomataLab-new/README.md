@@ -71,8 +71,13 @@ than cached in state.
 
 ## Correctness
 
-66 tests across 11 files (`npm test`, Vitest), all colocated with the logic
-they cover in `src/lib/`:
+73 tests total: 66 in the frontend (`npm test`, Vitest, 11 files colocated
+with the logic they cover in `src/lib/`) plus 7 in the backend (`npm test`
+in `server/`, Node's built-in `node:test` runner — `validateAutomaton.test.ts`
+covers `POST /automata`'s input validation: well-formed DFA/PDA data passes,
+an unknown `startState` or an out-of-range transition target is rejected,
+and CFG's structurally different shape is correctly exempted from the
+states-based checks).
 
 | File | Tests | What it checks |
 |---|---|---|
@@ -146,7 +151,12 @@ npm run dev              # http://localhost:5173
 | `npm run build` | Type-check (`tsc -b`) then production-build with Vite |
 | `npm run preview` | Serve the production build locally |
 | `npm run lint` | Oxlint |
+| `npm test` (in `server/`) | Run the backend's `node:test` suite |
 | `npm run migrate:deploy` (in `server/`) | `prisma migrate deploy` — production migrations, no interactive prompts |
+
+Local env vars: copy `.env.example` → `.env` at the repo root (frontend,
+optional for local dev) and in `server/` (backend, required — needs
+`DATABASE_URL`).
 
 ## Project structure
 
@@ -175,24 +185,41 @@ pass.
 
 ## Deployment
 
-No Docker — this deploys directly to managed platforms that handle
-environment consistency on their own.
+No Docker or containerization — this deploys directly to managed platforms
+that handle environment consistency natively.
 
-- **Frontend** (Vercel/Netlify): build command `npm run build`, publish
-  `dist/`. Set `VITE_API_URL` to the deployed backend's URL at build time
-  (defaults to `http://localhost:4000` if unset).
-- **Backend** (Render/Railway): start command `npm run migrate:deploy && npm run start`.
-  Set `DATABASE_URL` (Postgres connection string), `CORS_ORIGIN` (the
-  deployed frontend's origin — defaults to `http://localhost:5173`), and
-  `PORT` if the platform doesn't inject one automatically (`process.env.PORT`
-  is honored, falls back to 4000).
-- Migrations: `npm run migrate:deploy` runs `prisma migrate deploy`, the
-  non-interactive production variant of `prisma migrate dev` — never used
-  for local development, where `migrate dev` is still correct.
+**Frontend (Vercel or Netlify):**
+1. Connect the GitHub repo. The Vite framework preset is auto-detected
+   (build command `npm run build`, publish directory `dist/`).
+2. In the platform's environment variable settings, set `VITE_API_URL` to
+   the deployed backend's URL (e.g. `https://your-backend.onrender.com`).
+   This is a build-time variable — redeploy after changing it. Falls back to
+   `http://localhost:4000` if unset, which only matters for local dev.
+
+**Backend (Render or Railway):**
+1. Connect the GitHub repo, root directory `server/`.
+2. Set environment variables: `DATABASE_URL` (from the platform's managed
+   Postgres instance — Render and Railway both provision one and expose its
+   connection string directly), `FRONTEND_URL` (the deployed frontend's
+   URL, e.g. `https://your-app.vercel.app` — restricts CORS to that origin;
+   falls back to `http://localhost:5173` if unset), and `PORT` only if the
+   platform doesn't inject it automatically (both Render and Railway do;
+   `process.env.PORT` is honored either way, falling back to 4000).
+3. Build command: none needed (`npm install` only — the backend runs
+   TypeScript directly via `tsx`, no compile step). Start command:
+   `npm run start`.
+4. Migrations: run `npm run migrate:deploy` (`prisma migrate deploy`, the
+   non-interactive production variant of `migrate dev`) as a pre-deploy /
+   release step if the platform supports one, or manually once after the
+   first deploy via the platform's shell. Never use `migrate dev` in
+   production — it prompts interactively and is dev-only.
 
 **Secrets:** `server/.env` (which holds `DATABASE_URL`) is gitignored and
-confirmed never committed — `git log --all --full-history` for any `.env`
-file returns nothing tracked.
+confirmed never committed — `git log --all --full-history -- .env` across
+the entire repo history returns nothing tracked, and a full-history content
+scan for `DATABASE_URL=`/connection-string patterns turns up only this
+repo's own `.env.example` placeholders and generic bundled documentation
+examples (`user:password@...`), never a real credential.
 
 ## What I'd build next
 
@@ -206,8 +233,9 @@ file returns nothing tracked.
 - Code-split the frontend bundle — the production build currently warns
   about a single ~575 KB JS chunk (mostly React Flow); dynamic `import()`
   per route would fix this.
-- Basic backend input validation on `POST /automata` (shape-check `data`
-  before persisting) and a couple of tests for it — discussed, not yet built.
+- Surface `POST /automata` validation failures (400s) in the frontend's
+  Save flow — the backend correctly rejects malformed automaton data, but
+  the UI currently fails silently rather than showing the error.
 
 Explicitly out of scope, not just deferred: multi-user auth and any kind of
 horizontal scaling. This is a single-user educational tool; adding either
