@@ -6,7 +6,7 @@ import { ControlBar, ControlGroup } from './ui/ControlBar';
 import { JsonPopover } from './ui/JsonPopover';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
-import { Button } from './ui/Button';
+import { Button, Spinner } from './ui/Button';
 import { EmptyState, Badge } from './ui/Composite';
 import { useFocus } from '../context/FocusContext';
 import type { TM } from '../types/tm';
@@ -24,6 +24,8 @@ export default function TMPage() {
   const [selectedSaved, setSelectedSaved] = useState('');
   const [saveName, setSaveName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loadingSaved, setLoadingSaved] = useState(false);
 
   async function refreshSaved() {
     const list = await listAutomata();
@@ -49,22 +51,33 @@ export default function TMPage() {
 
   async function handleSave() {
     if (!tm || !saveName.trim()) return;
-    await saveAutomaton('tm', saveName, '', tm);
-    setSaveName('');
-    setMenuOpen(false);
-    refreshSaved();
+    setSaving(true);
+    try {
+      await saveAutomaton('tm', saveName, '', tm);
+      setSaveName('');
+      setMenuOpen(false);
+      await refreshSaved();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleLoadSaved(id: string) {
     setSelectedSaved(id);
     if (!id) return;
-    const record = await loadAutomaton(Number(id));
-    setTm(record.data);
-    setText(JSON.stringify(record.data, null, 2));
-    setResult(null);
+    setLoadingSaved(true);
+    try {
+      const record = await loadAutomaton(Number(id));
+      setTm(record.data);
+      setText(JSON.stringify(record.data, null, 2));
+      setResult(null);
+    } finally {
+      setLoadingSaved(false);
+    }
   }
 
   const currentStep = result?.steps[stepIndex];
+  const prevStep = stepIndex > 0 ? result?.steps[stepIndex - 1] : undefined;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
@@ -75,10 +88,13 @@ export default function TMPage() {
           </ControlGroup>
 
           <ControlGroup label="Saved">
-            <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} style={{ width: 150 }}>
-              <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
-              {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-            </Select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} disabled={loadingSaved} style={{ width: 150 }}>
+                <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
+                {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </Select>
+              {loadingSaved && <Spinner />}
+            </div>
           </ControlGroup>
 
           <ControlGroup label="Tape input">
@@ -108,7 +124,7 @@ export default function TMPage() {
                 <p style={{ fontSize: 10.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Save as</p>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name..." style={{ flex: 1 }} />
-                  <Button size="sm" onClick={handleSave} disabled={!saveName.trim()}>Save</Button>
+                  <Button size="sm" onClick={handleSave} loading={saving} disabled={!saveName.trim() || saving}>Save</Button>
                 </div>
               </div>
             )}
@@ -143,16 +159,87 @@ export default function TMPage() {
               <span style={{ color: 'var(--violet)', fontWeight: 700 }}>{currentStep?.state}</span>
             </span>
           </div>
-          {stepIndex > 0 && currentStep && (
-            <div style={{ marginTop: 14, padding: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
-              <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
-                Current Step
-              </p>
-              <p style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--violet)', fontWeight: 700, margin: 0 }}>
-                Head at position {currentStep.headPosition}, reading '{currentStep.tape[currentStep.headPosition]}'
-              </p>
-            </div>
-          )}
+          {currentStep && (() => {
+            if (prevStep) {
+              const symbolRead = prevStep.tape[prevStep.headPosition] ?? tm?.blankSymbol ?? '_';
+              const symbolWritten = currentStep.tape[prevStep.headPosition] ?? tm?.blankSymbol ?? '_';
+              const move = currentStep.headPosition > prevStep.headPosition ? 'R' : 'L';
+              return (
+                <div style={{ marginTop: 14, padding: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                  <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
+                    <div>
+                      <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                        Current Step
+                      </p>
+                      <p style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--violet)', fontWeight: 700, margin: 0 }}>
+                        {prevStep.state} —{symbolRead}→ {currentStep.state}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                        Head Position
+                      </p>
+                      <p style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--text-1)', fontWeight: 600, margin: 0 }}>
+                        {prevStep.headPosition} → {currentStep.headPosition}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                        Action
+                      </p>
+                      <p style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text-1)', margin: 0 }}>
+                        Read '{symbolRead}', write '{symbolWritten}', move {move}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Step 0 with no prior step: the initial configuration. Still
+            // worth explaining, especially when the machine halted here
+            // immediately (e.g. no transition defined for the symbol read).
+            // Unlike simulatePDA, simulateTM has no backtracking or branch
+            // exploration — every recorded step is one real write+move, so
+            // `steps.length === 1` reliably means no transition existed for
+            // the very first (state, symbol) pair. No PDA-style epsilon-
+            // branch false negative is possible here; verified against
+            // simulateTM.ts before leaving this check unchanged.
+            const symbolRead = currentStep.tape[currentStep.headPosition] ?? tm?.blankSymbol ?? '_';
+            const haltedImmediately = result.steps.length === 1 && !result.accepted;
+            return (
+              <div style={{ marginTop: 14, padding: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
+                  <div>
+                    <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                      Current Step
+                    </p>
+                    <p style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--violet)', fontWeight: 700, margin: 0 }}>
+                      Start: {currentStep.state}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                      Head Position
+                    </p>
+                    <p style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--text-1)', fontWeight: 600, margin: 0 }}>
+                      {currentStep.headPosition} (reading '{symbolRead}')
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                      Action
+                    </p>
+                    <p style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text-1)', margin: 0 }}>
+                      {haltedImmediately
+                        ? 'No transition was defined for this state/symbol — the machine halted immediately.'
+                        : 'Simulation begins here.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

@@ -11,9 +11,10 @@ import { simulateDFA } from '../lib/simulate';
 import { saveAutomaton, listAutomata, loadAutomaton } from '../lib/api';
 import { ControlBar, ControlGroup } from './ui/ControlBar';
 import { PipelineStepper } from './ui/PipelineStepper';
+import { PartitionStepViewer } from './PartitionStepViewer';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
-import { Button } from './ui/Button';
+import { Button, Spinner } from './ui/Button';
 import { EmptyState, Badge } from './ui/Composite';
 import { useFocus } from '../context/FocusContext';
 import type { NFA } from '../types/automaton';
@@ -31,17 +32,22 @@ export default function RegexPage() {
   const [result, setResult] = useState<{ path: string[]; accepted: boolean } | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [inspectedState, setInspectedState] = useState<string | null>(null);
+  const [showPartitionSteps, setShowPartitionSteps] = useState(false);
 
   const [savedItems, setSavedItems] = useState<{ id: number; name: string }[]>([]);
   const [selectedSaved, setSelectedSaved] = useState('');
   const [saveName, setSaveName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loadingSaved, setLoadingSaved] = useState(false);
 
   const rawDerivedDfa = nfa ? subsetConstruction(nfa, 2, 'Derived DFA', '') : null;
   const relabeled = rawDerivedDfa ? relabelDFA(rawDerivedDfa) : null;
   const derivedDfa = relabeled?.dfa ?? null;
   const derivedSubsetMap = relabeled?.subsetMap ?? {};
-  const minimizedDfa = derivedDfa ? minimizeDFA(derivedDfa, 3, 'Minimal DFA', '') : null;
+  const minimizeResult = derivedDfa ? minimizeDFA(derivedDfa, 3, 'Minimal DFA', '') : null;
+  const minimizedDfa = minimizeResult?.dfa ?? null;
+  const minimizeHistory = minimizeResult?.history ?? [];
 
   async function refreshSaved() {
     const list = await listAutomata();
@@ -73,27 +79,38 @@ export default function RegexPage() {
 
   async function handleSave() {
     if (!nfa || !saveName.trim()) return;
-    await saveAutomaton('nfa', saveName, '', nfa);
-    setSaveName('');
-    setMenuOpen(false);
-    refreshSaved();
+    setSaving(true);
+    try {
+      await saveAutomaton('nfa', saveName, '', nfa);
+      setSaveName('');
+      setMenuOpen(false);
+      await refreshSaved();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleLoadSaved(id: string) {
     setSelectedSaved(id);
     if (!id) return;
-    const record = await loadAutomaton(Number(id));
-    setNfa(record.data);
-    setRegexText(record.data.name || '');
-    setResult(null);
-    setStage('NFA');
-    setInspectedState(null);
-    setMenuOpen(false);
+    setLoadingSaved(true);
+    try {
+      const record = await loadAutomaton(Number(id));
+      setNfa(record.data);
+      setRegexText(record.data.name || '');
+      setResult(null);
+      setStage('NFA');
+      setInspectedState(null);
+      setMenuOpen(false);
+    } finally {
+      setLoadingSaved(false);
+    }
   }
 
   function handleStageChange(s: Stage) {
     setStage(s);
     setInspectedState(null);
+    setShowPartitionSteps(false);
   }
 
   const currentState = result?.path[stepIndex];
@@ -114,10 +131,13 @@ export default function RegexPage() {
           </div>
 
           <ControlGroup label="Saved">
-            <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} style={{ width: 150 }}>
-              <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
-              {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-            </Select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} disabled={loadingSaved} style={{ width: 150 }}>
+                <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
+                {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </Select>
+              {loadingSaved && <Spinner />}
+            </div>
           </ControlGroup>
 
           {nfa && (
@@ -154,7 +174,7 @@ export default function RegexPage() {
                 <p style={{ fontSize: 10.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Save current</p>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name..." style={{ flex: 1 }} />
-                  <Button size="sm" onClick={handleSave} disabled={!saveName.trim()}>Save</Button>
+                  <Button size="sm" onClick={handleSave} loading={saving} disabled={!saveName.trim() || saving}>Save</Button>
                 </div>
               </div>
             )}
@@ -172,24 +192,40 @@ export default function RegexPage() {
         <div style={{ padding: '8px 20px', color: 'var(--rose)', fontSize: 12.5, fontFamily: 'var(--mono)' }}>{regexError}</div>
       )}
 
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}>
-        {!nfa ? (
-          <EmptyState icon="⌁" title="No NFA built" desc="Enter a regex and click Build NFA." />
-        ) : stage === 'NFA' ? (
-          <NFAViewer key={nfa.name + '-' + nfa.states.length} nfa={nfa} />
-        ) : stage === 'Derived DFA' && derivedDfa ? (
-          <DFAViewer key={derivedDfa.name + '-' + derivedDfa.states.length} dfa={derivedDfa} onStateClick={setInspectedState} />
-        ) : minimizedDfa ? (
-          <DFAViewer
-            key={minimizedDfa.name + '-' + minimizedDfa.states.length}
-            dfa={minimizedDfa}
-            currentState={currentState}
-            activeTransition={activeTransition}
-          />
-        ) : null}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+          {!nfa ? (
+            <EmptyState icon="⌁" title="No NFA built" desc="Enter a regex and click Build NFA." />
+          ) : stage === 'NFA' ? (
+            <NFAViewer key={nfa.name + '-' + nfa.states.length} nfa={nfa} />
+          ) : stage === 'Derived DFA' && derivedDfa ? (
+            <DFAViewer key={derivedDfa.name + '-' + derivedDfa.states.length} dfa={derivedDfa} onStateClick={setInspectedState} />
+          ) : minimizedDfa ? (
+            <DFAViewer
+              key={minimizedDfa.name + '-' + minimizedDfa.states.length}
+              dfa={minimizedDfa}
+              currentState={currentState}
+              activeTransition={activeTransition}
+            />
+          ) : null}
 
-        {inspectedState && stage === 'Derived DFA' && derivedDfa && (
-          <StateInspector stateId={inspectedState} dfa={derivedDfa} subsetMap={derivedSubsetMap} onClose={() => setInspectedState(null)} />
+          {inspectedState && stage === 'Derived DFA' && derivedDfa && (
+            <StateInspector stateId={inspectedState} dfa={derivedDfa} subsetMap={derivedSubsetMap} onClose={() => setInspectedState(null)} />
+          )}
+
+          {stage === 'Minimal DFA' && minimizedDfa && (
+            <div style={{ position: 'absolute', top: 12, right: 16, zIndex: 10 }}>
+              <Button variant="ghost" size="sm" onClick={() => setShowPartitionSteps((s) => !s)}>
+                {showPartitionSteps ? 'Hide' : 'Show'} Partition Steps
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {stage === 'Minimal DFA' && minimizedDfa && showPartitionSteps && (
+          <div style={{ flexShrink: 0, maxHeight: 260, overflowY: 'auto', borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
+            <PartitionStepViewer history={minimizeHistory} />
+          </div>
         )}
       </div>
 

@@ -1,9 +1,15 @@
 import type { DFA } from '../types/automaton';
 
-export function minimizeDFA(dfa: DFA, id: number, name: string, description: string): DFA {
+export type PartitionRound = {
+  partitions: string[][]; // each inner array is a group of original state names
+};
+
+export function minimizeDFA(dfa: DFA, id: number, name: string, description: string): { dfa: DFA; history: PartitionRound[] } {
   const accept = new Set(dfa.acceptStates);
   const nonAccept = dfa.states.filter((s) => !accept.has(s));
   let partitions: string[][] = [dfa.states.filter((s) => accept.has(s)), nonAccept].filter((p) => p.length > 0);
+
+  const history: PartitionRound[] = [{ partitions: partitions.map((g) => [...g]) }];
 
   let changed = true;
   while (changed) {
@@ -32,6 +38,7 @@ export function minimizeDFA(dfa: DFA, id: number, name: string, description: str
     }
 
     partitions = newPartitions;
+    history.push({ partitions: partitions.map((g) => [...g]) });
   }
 
   const groupId = (state: string) => {
@@ -56,7 +63,7 @@ export function minimizeDFA(dfa: DFA, id: number, name: string, description: str
     return partitions[idx].some((s) => dfa.acceptStates.includes(s));
   });
 
-  return {
+  const minimizedDfa: DFA = {
     id,
     name,
     description,
@@ -66,4 +73,6 @@ export function minimizeDFA(dfa: DFA, id: number, name: string, description: str
     startState: groupId(dfa.startState),
     acceptStates: minAccept,
   };
+
+  return { dfa: minimizedDfa, history };
 }

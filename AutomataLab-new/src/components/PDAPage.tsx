@@ -7,10 +7,11 @@ import { ControlBar, ControlGroup } from './ui/ControlBar';
 import { JsonPopover } from './ui/JsonPopover';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
-import { Button } from './ui/Button';
+import { Button, Spinner } from './ui/Button';
 import { EmptyState, Badge } from './ui/Composite';
 import { useFocus } from '../context/FocusContext';
 import type { PDA } from '../types/pda';
+import { EPSILON_PDA } from '../types/pda';
 
 export default function PDAPage() {
   const { focused, toggle } = useFocus();
@@ -25,6 +26,8 @@ export default function PDAPage() {
   const [selectedSaved, setSelectedSaved] = useState('');
   const [saveName, setSaveName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loadingSaved, setLoadingSaved] = useState(false);
 
   async function refreshSaved() {
     const list = await listAutomata();
@@ -50,19 +53,29 @@ export default function PDAPage() {
 
   async function handleSave() {
     if (!pda || !saveName.trim()) return;
-    await saveAutomaton('pda', saveName, '', pda);
-    setSaveName('');
-    setMenuOpen(false);
-    refreshSaved();
+    setSaving(true);
+    try {
+      await saveAutomaton('pda', saveName, '', pda);
+      setSaveName('');
+      setMenuOpen(false);
+      await refreshSaved();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleLoadSaved(id: string) {
     setSelectedSaved(id);
     if (!id) return;
-    const record = await loadAutomaton(Number(id));
-    setPda(record.data);
-    setText(JSON.stringify(record.data, null, 2));
-    setResult(null);
+    setLoadingSaved(true);
+    try {
+      const record = await loadAutomaton(Number(id));
+      setPda(record.data);
+      setText(JSON.stringify(record.data, null, 2));
+      setResult(null);
+    } finally {
+      setLoadingSaved(false);
+    }
   }
 
   const currentStep = result?.steps[stepIndex];
@@ -77,10 +90,13 @@ export default function PDAPage() {
           </ControlGroup>
 
           <ControlGroup label="Saved">
-            <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} style={{ width: 150 }}>
-              <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
-              {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-            </Select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} disabled={loadingSaved} style={{ width: 150 }}>
+                <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
+                {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </Select>
+              {loadingSaved && <Spinner />}
+            </div>
           </ControlGroup>
 
           <ControlGroup label="Test string">
@@ -108,7 +124,7 @@ export default function PDAPage() {
                 <p style={{ fontSize: 10.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Save as</p>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name..." style={{ flex: 1 }} />
-                  <Button size="sm" onClick={handleSave} disabled={!saveName.trim()}>Save</Button>
+                  <Button size="sm" onClick={handleSave} loading={saving} disabled={!saveName.trim() || saving}>Save</Button>
                 </div>
               </div>
             )}
@@ -161,17 +177,94 @@ export default function PDAPage() {
               </div>
             ))}
           </div>
-          {prevStep && currentStep && (
-            <div style={{ marginTop: 14, padding: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
-              <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>Current Step</p>
-              <p style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--violet)', fontWeight: 700, margin: 0 }}>
-                {prevStep.state} → {currentStep.state}
-              </p>
-              <p style={{ fontFamily: 'var(--mono)', fontSize: 12.5, color: 'var(--text-1)', margin: '6px 0 0' }}>
-                Stack top: {prevStep.stack[prevStep.stack.length - 1] ?? 'empty'} → {currentStep.stack[currentStep.stack.length - 1] ?? 'empty'}
-              </p>
-            </div>
-          )}
+          {currentStep && (() => {
+            if (prevStep) {
+              const consumed = currentStep.inputIndex > prevStep.inputIndex;
+              const symbol = consumed ? input[prevStep.inputIndex] : EPSILON_PDA;
+              const prevTop = prevStep.stack[prevStep.stack.length - 1] ?? 'empty';
+              const pushed = currentStep.stack.slice(prevStep.stack.length - 1);
+              return (
+                <div style={{ marginTop: 14, padding: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                  <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
+                    <div>
+                      <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                        Current Step
+                      </p>
+                      <p style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--violet)', fontWeight: 700, margin: 0 }}>
+                        {prevStep.state} —{symbol}→ {currentStep.state}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                        Input
+                      </p>
+                      <p style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--text-1)', fontWeight: 600, margin: 0 }}>
+                        {consumed ? symbol : 'ε (no symbol consumed)'}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                        Action
+                      </p>
+                      <p style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text-1)', margin: 0 }}>
+                        Pop '{prevTop}' → push '{pushed.join('') || '∅'}'
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Step 0 with no prior step: the initial configuration. Still
+            // worth explaining, especially when the simulation halted here
+            // immediately (e.g. no valid transition existed at all).
+            //
+            // `result.steps.length === 1` is NOT a reliable signal for this:
+            // simulatePDA's backtracking search can explore an epsilon
+            // branch that consumes no input before dead-ending, which
+            // produces a 2-step (or longer) trace that still made no real
+            // progress on the input string. What actually matters is
+            // whether any input was ever consumed — i.e. whether the final
+            // recorded inputIndex is still 0. A genuine multi-step
+            // rejection (several real symbols consumed before getting
+            // stuck) always has a final inputIndex > 0, so this correctly
+            // tells the two cases apart.
+            const stackTop = currentStep.stack[currentStep.stack.length - 1] ?? 'empty';
+            const madeProgress = result.steps[result.steps.length - 1].inputIndex > 0;
+            const haltedImmediately = !result.accepted && !madeProgress;
+            return (
+              <div style={{ marginTop: 14, padding: 14, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
+                  <div>
+                    <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                      Current Step
+                    </p>
+                    <p style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--violet)', fontWeight: 700, margin: 0 }}>
+                      Start: {currentStep.state}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                      Stack Top
+                    </p>
+                    <p style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--text-1)', fontWeight: 600, margin: 0 }}>
+                      {stackTop}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>
+                      Action
+                    </p>
+                    <p style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text-1)', margin: 0 }}>
+                      {haltedImmediately
+                        ? 'No valid transition was found from this configuration — the simulation halted immediately.'
+                        : 'Simulation begins here.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

@@ -1,5 +1,4 @@
 import type { TM } from '../types/tm';
-import { BLANK } from '../types/tm';
 
 export type TMStep = {
   tape: string[];

@@ -8,7 +8,7 @@ import { ControlBar, ControlGroup } from './ui/ControlBar';
 import { GrammarPopover } from './ui/GrammarPopover';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
-import { Button } from './ui/Button';
+import { Button, Spinner } from './ui/Button';
 import { EmptyState, Badge } from './ui/Composite';
 import { saveAutomaton, listAutomata, loadAutomaton } from '../lib/api';
 import { useFocus } from '../context/FocusContext';
@@ -26,6 +26,8 @@ export default function CFGPage() {
   const [selectedSaved, setSelectedSaved] = useState('');
   const [saveName, setSaveName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loadingSaved, setLoadingSaved] = useState(false);
 
   async function refreshSaved() {
     const list = await listAutomata();
@@ -51,23 +53,33 @@ export default function CFGPage() {
 
   async function handleSave() {
     if (!cfg || !saveName.trim()) return;
-    await saveAutomaton('cfg', saveName, '', cfg);
-    setSaveName('');
-    setMenuOpen(false);
-    refreshSaved();
+    setSaving(true);
+    try {
+      await saveAutomaton('cfg', saveName, '', cfg);
+      setSaveName('');
+      setMenuOpen(false);
+      await refreshSaved();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleLoadSaved(id: string) {
     setSelectedSaved(id);
     if (!id) return;
-    const record = await loadAutomaton(Number(id));
-    setCfg(record.data);
-    const grouped = record.data.productions.reduce((acc: Record<string, string[]>, p: any) => {
-      acc[p.left] = [...(acc[p.left] || []), p.right.join('')];
-      return acc;
-    }, {});
-    setGrammarText(Object.entries(grouped).map(([left, rights]) => `${left} -> ${(rights as string[]).join(' | ')}`).join('\n'));
-    setResult(null);
+    setLoadingSaved(true);
+    try {
+      const record = await loadAutomaton(Number(id));
+      setCfg(record.data);
+      const grouped = record.data.productions.reduce((acc: Record<string, string[]>, p: any) => {
+        acc[p.left] = [...(acc[p.left] || []), p.right.join('')];
+        return acc;
+      }, {});
+      setGrammarText(Object.entries(grouped).map(([left, rights]) => `${left} -> ${(rights as string[]).join(' | ')}`).join('\n'));
+      setResult(null);
+    } finally {
+      setLoadingSaved(false);
+    }
   }
 
   const nonTerminalCount = cfg?.variables.length ?? 0;
@@ -83,10 +95,13 @@ export default function CFGPage() {
           </ControlGroup>
 
           <ControlGroup label="Saved">
-            <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} style={{ width: 150 }}>
-              <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
-              {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-            </Select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} disabled={loadingSaved} style={{ width: 150 }}>
+                <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
+                {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </Select>
+              {loadingSaved && <Spinner />}
+            </div>
           </ControlGroup>
 
           <ControlGroup label="Test string">
@@ -120,7 +135,7 @@ export default function CFGPage() {
                 <p style={{ fontSize: 10.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Save as</p>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name..." style={{ flex: 1 }} />
-                  <Button size="sm" onClick={handleSave} disabled={!saveName.trim()}>Save</Button>
+                  <Button size="sm" onClick={handleSave} loading={saving} disabled={!saveName.trim() || saving}>Save</Button>
                 </div>
               </div>
             )}

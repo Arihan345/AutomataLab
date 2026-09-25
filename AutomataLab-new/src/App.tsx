@@ -6,6 +6,8 @@ import RegexPage from './components/RegexPage';
 import PDAPage from './components/PDAPage';
 import CFGPage from './components/CFGPage';
 import TMPage from './components/TMPage';
+import DFAEquivalencePage from './components/DFAEquivalencePage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { FocusProvider, useFocus } from './context/FocusContext';
 
 function Layout() {
@@ -21,6 +23,7 @@ function Layout() {
           <Route path="/pda" element={<PDAPage />} />
           <Route path="/cfg" element={<CFGPage />} />
           <Route path="/tm" element={<TMPage />} />
+          <Route path="/dfa-equivalence" element={<DFAEquivalencePage />} />
         </Routes>
       </main>
     </div>
@@ -29,10 +32,12 @@ function Layout() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <FocusProvider>
-        <Layout />
-      </FocusProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <FocusProvider>
+          <Layout />
+        </FocusProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

@@ -7,6 +7,7 @@ const links = [
   { to: '/pda', label: 'Pushdown Automata', num: '03' },
   { to: '/cfg', label: 'Context-Free Grammars', num: '04' },
   { to: '/tm', label: 'Turing Machines', num: '05' },
+  { to: '/dfa-equivalence', label: 'DFA Equivalence', num: '06' },
 ];
 
 export default function Sidebar() {

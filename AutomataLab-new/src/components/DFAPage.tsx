@@ -1,18 +1,31 @@
 import { useState, useEffect } from 'react';
 import DFAViewer from './DFAViewer';
+import DFABuilder from './DFABuilder';
 import { simulateDFA } from '../lib/simulate';
 import { saveAutomaton, listAutomata, loadAutomaton } from '../lib/api';
 import { ControlBar, ControlGroup } from './ui/ControlBar';
 import { JsonPopover } from './ui/JsonPopover';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
-import { Button } from './ui/Button';
+import { Button, Spinner } from './ui/Button';
 import { EmptyState, Badge } from './ui/Composite';
 import { useFocus } from '../context/FocusContext';
 import type { DFA } from '../types/automaton';
 
+const BLANK_DFA: DFA = {
+  id: 0,
+  name: 'Untitled DFA',
+  description: '',
+  states: [],
+  alphabet: [],
+  transitions: {},
+  startState: '',
+  acceptStates: [],
+};
+
 export default function DFAPage() {
   const { focused, toggle } = useFocus();
+  const [mode, setMode] = useState<'simulate' | 'build'>('simulate');
   const [text, setText] = useState('');
   const [textError, setTextError] = useState<string | null>(null);
   const [dfa, setDfa] = useState<DFA | null>(null);
@@ -23,6 +36,8 @@ export default function DFAPage() {
   const [selectedSaved, setSelectedSaved] = useState('');
   const [saveName, setSaveName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loadingSaved, setLoadingSaved] = useState(false);
 
   async function refreshSaved() {
     const list = await listAutomata();
@@ -48,19 +63,29 @@ export default function DFAPage() {
 
   async function handleSave() {
     if (!dfa || !saveName.trim()) return;
-    await saveAutomaton('dfa', saveName, '', dfa);
-    setSaveName('');
-    setMenuOpen(false);
-    refreshSaved();
+    setSaving(true);
+    try {
+      await saveAutomaton('dfa', saveName, '', dfa);
+      setSaveName('');
+      setMenuOpen(false);
+      await refreshSaved();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleLoadSaved(id: string) {
     setSelectedSaved(id);
     if (!id) return;
-    const record = await loadAutomaton(Number(id));
-    setDfa(record.data);
-    setText(JSON.stringify(record.data, null, 2));
-    setResult(null);
+    setLoadingSaved(true);
+    try {
+      const record = await loadAutomaton(Number(id));
+      setDfa(record.data);
+      setText(JSON.stringify(record.data, null, 2));
+      setResult(null);
+    } finally {
+      setLoadingSaved(false);
+    }
   }
 
   const currentState = result?.path[stepIndex];
@@ -73,29 +98,47 @@ export default function DFAPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
       {!focused && (
         <ControlBar>
+          <ControlGroup label="Mode">
+            <div style={{ display: 'flex', gap: 4 }}>
+              <Button size="sm" variant={mode === 'build' ? 'primary' : 'secondary'} onClick={() => setMode('build')}>
+                ✎ Build
+              </Button>
+              <Button size="sm" variant={mode === 'simulate' ? 'primary' : 'secondary'} onClick={() => setMode('simulate')}>
+                ▶ Simulate
+              </Button>
+            </div>
+          </ControlGroup>
+
           <ControlGroup label="DFA">
             <JsonPopover label={dfa ? 'Loaded ▾' : 'Load JSON'} text={text} onChange={setText} onBuild={handleBuild} error={textError} />
           </ControlGroup>
 
           <ControlGroup label="Saved">
-            <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} style={{ width: 150 }}>
-              <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
-              {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-            </Select>
-          </ControlGroup>
-
-          <ControlGroup label="Test string">
-            <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder="e.g. aba" style={{ width: 130 }} disabled={!dfa} />
-          </ControlGroup>
-
-          <div style={{ paddingTop: 16 }}>
-            <Button onClick={handleRun} disabled={!dfa || !input.trim()}>▶ Run</Button>
-          </div>
-
-          {result && (
-            <div style={{ paddingTop: 15 }}>
-              <Badge tone={result.accepted ? 'success' : 'danger'}>{result.accepted ? 'Accepted' : 'Rejected'}</Badge>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Select value={selectedSaved} onChange={(e) => handleLoadSaved(e.target.value)} disabled={loadingSaved} style={{ width: 150 }}>
+                <option value="">{savedItems.length ? 'Select...' : 'None saved'}</option>
+                {savedItems.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </Select>
+              {loadingSaved && <Spinner />}
             </div>
+          </ControlGroup>
+
+          {mode === 'simulate' && (
+            <>
+              <ControlGroup label="Test string">
+                <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder="e.g. aba" style={{ width: 130 }} disabled={!dfa} />
+              </ControlGroup>
+
+              <div style={{ paddingTop: 16 }}>
+                <Button onClick={handleRun} disabled={!dfa || !input.trim()}>▶ Run</Button>
+              </div>
+
+              {result && (
+                <div style={{ paddingTop: 15 }}>
+                  <Badge tone={result.accepted ? 'success' : 'danger'}>{result.accepted ? 'Accepted' : 'Rejected'}</Badge>
+                </div>
+              )}
+            </>
           )}
 
           <div style={{ paddingTop: 16 }}>
@@ -109,7 +152,7 @@ export default function DFAPage() {
                 <p style={{ fontSize: 10.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Save current</p>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
                   <Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name..." style={{ flex: 1 }} />
-                  <Button size="sm" onClick={handleSave} disabled={!saveName.trim()}>Save</Button>
+                  <Button size="sm" onClick={handleSave} loading={saving} disabled={!saveName.trim() || saving}>Save</Button>
                 </div>
               </div>
             )}
@@ -124,14 +167,23 @@ export default function DFAPage() {
       )}
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        {!dfa ? (
-          <EmptyState icon="⌂" title="No DFA loaded" desc="Open the DFA control to paste a definition." />
+        {mode === 'build' ? (
+          <DFABuilder
+            dfa={dfa ?? BLANK_DFA}
+            onChange={(next) => {
+              setDfa(next);
+              setText(JSON.stringify(next, null, 2));
+              setResult(null);
+            }}
+          />
+        ) : !dfa ? (
+          <EmptyState icon="⌂" title="No DFA loaded" desc="Open the DFA control to paste a definition, or switch to Build mode." />
         ) : (
           <DFAViewer dfa={dfa} currentState={currentState} activeTransition={activeTransition} />
         )}
       </div>
 
-      {result && !focused && (
+      {mode === 'simulate' && result && !focused && (
         <div style={{ borderTop: '1px solid var(--border)', padding: '20px 24px 24px', background: 'var(--bg-elevated)' }}>
           <p style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--text-3)', letterSpacing: '0.06em', marginBottom: 14 }}>SIMULATION</p>
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>

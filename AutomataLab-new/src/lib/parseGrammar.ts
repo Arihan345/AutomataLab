@@ -1,5 +1,15 @@
 import type { CFG, Production } from '../types/cfg';
+import { convertToCNF } from './cnfConvert';
 
+function isVariableSymbol(sym: string): boolean {
+  return /^[A-Z]$/.test(sym);
+}
+
+// Parses "S -> AB | a" style grammar text into a CFG. Rules may be in
+// Chomsky Normal Form already, or more general — a right-hand side may have
+// any number of symbols and mix terminals with variables (e.g. "S -> aSb"
+// or "E -> E+T"); the grammar is automatically converted to CNF (see
+// cnfConvert.ts) before being returned, since CYK requires CNF input.
 export function parseGrammar(text: string, id: number, name: string, description: string): CFG {
   const lines = text
     .split('\n')
@@ -28,24 +38,16 @@ export function parseGrammar(text: string, id: number, name: string, description
         throw new Error(`Empty alternative in rule for "${left}"`);
       }
 
-      if (alt.length === 1 && alt === alt.toLowerCase()) {
-        // single terminal
-        terminals.add(alt);
-        productions.push({ left, right: [alt] });
-      } else if (alt.length === 2) {
-        // two variables (CNF requirement)
-        variables.add(alt[0]);
-        variables.add(alt[1]);
-        productions.push({ left, right: [alt[0], alt[1]] });
-      } else {
-        throw new Error(
-          `Rule "${left} -> ${alt}" is not in Chomsky Normal Form (must be exactly 2 variables or 1 terminal)`
-        );
-      }
+      const symbols = alt.split('');
+      symbols.forEach((sym) => {
+        if (isVariableSymbol(sym)) variables.add(sym);
+        else terminals.add(sym);
+      });
+      productions.push({ left, right: symbols });
     });
   });
 
-  return {
+  const cfg: CFG = {
     id,
     name,
     description,
@@ -54,4 +56,6 @@ export function parseGrammar(text: string, id: number, name: string, description
     startSymbol,
     productions,
   };
+
+  return convertToCNF(cfg);
 }

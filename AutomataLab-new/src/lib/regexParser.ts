@@ -1,4 +1,5 @@
 import type { RegexNode } from '../types/regex';
+import { EPSILON } from '../types/automaton';
 
 export class ParserState {
   input: string;
@@ -34,9 +35,20 @@ export function parseAtom(state: ParserState): RegexNode {
 }
 export function parseStar(state: ParserState): RegexNode {
   const node = parseAtom(state);
-  if (state.peek() === '*') {
+  const op = state.peek();
+  if (op === '*') {
     state.advance();
     return { type: 'star', child: node };
+  }
+  if (op === '+') {
+    // x+ desugars to x . x* (one or more)
+    state.advance();
+    return { type: 'concat', left: node, right: { type: 'star', child: node } };
+  }
+  if (op === '?') {
+    // x? desugars to x | ε (optional)
+    state.advance();
+    return { type: 'union', left: node, right: { type: 'symbol', value: EPSILON } };
   }
   return node;
 }
